@@ -704,40 +704,21 @@ class MultiLoopTuner:
             print("No tuning results. Run tuning first.")
             return
         sys_cl = self.heli.create_closed_loop(self.best_params, self.best_sof)
-        import matplotlib.pyplot as mpl
-        import matplotlib.gridspec as gridspec
-        fig = mpl.figure(figsize=(16, 10))
-        gs = gridspec.GridSpec(2, 2, figure=fig)
-        # Top-left: 3x3 step responses (Actual vs Desired)
-        gs_steps = gridspec.GridSpecFromSubplotSpec(3, 3, subplot_spec=gs[0, 0], wspace=0.35, hspace=0.35)
+
+        # Collect data for export before plotting
         t = np.linspace(0, float(self.plot_t_end), max(200, int(self.plot_t_end * 100)))
         inputs = ['theta-ref', 'phi-ref', 'r-ref']
         outputs = ['theta', 'phi', 'r']
-        # Collect traces for export
         traces = { 'matrix': [] }
         for i in range(3):
             row_traces = []
             for j in range(3):
-                ax = fig.add_subplot(gs_steps[i, j])
                 t_resp, y_siso = ct.step_response(sys_cl, T=t, input=j, output=i)
                 yv = np.squeeze(y_siso) if y_siso is not None else np.zeros_like(t_resp)
-                ax.plot(t_resp, yv, 'b-', linewidth=2, label='Actual')
                 if i == j:
                     desired = np.ones_like(t_resp)
                 else:
                     desired = np.zeros_like(t_resp)
-                # Ensure t_resp and desired are valid arrays
-                t_plot = t_resp if t_resp is not None else np.zeros_like(desired)
-                desired_plot = desired if desired is not None else np.zeros_like(t_plot)
-                ax.plot(t_plot, desired_plot, 'r--', linewidth=1.2, label='Desired')
-                ax.grid(True, alpha=0.3)
-                if i == 2:
-                    ax.set_xlabel('Time (s)')
-                if j == 0:
-                    ax.set_ylabel('Amplitude')
-                ax.set_title(f'From: {inputs[j]}\nTo: {outputs[i]}', fontsize=9)
-                if i == 0 and j == 0:
-                    ax.legend(fontsize=8)
                 row_traces.append({
                     't': t_resp.tolist() if t_resp is not None else [],
                     'actual': yv.tolist(),
@@ -746,52 +727,10 @@ class MultiLoopTuner:
                     'to': outputs[i]
                 })
             traces['matrix'].append(row_traces)
-        fig.suptitle('Closed-Loop Diagnostics', fontsize=14, fontweight='bold')
-        # Top-right: Bode magnitude and phase (diagonal channels open-loop approx.)
-        ax_mag = fig.add_subplot(gs[0, 1])
-        ax_phase = ax_mag.twinx()
-        colors = ['tab:blue', 'tab:orange', 'tab:green']
-        w = np.logspace(-3, 2, 400)
-        for ch, c in enumerate(colors):
-            # Approximate open-loop: response from input ch to output ch with unity feedback
-            # Using closed-loop to get indicative frequency behavior
-            sys_tf = ct.ss2tf(sys_cl)
-            gij = ct.TransferFunction(sys_tf.num[ch][ch], sys_tf.den[ch][ch])
-            mag, phase, ww = ct.bode(gij, w, Plot=False)
-            if mag is None:
-                continue
-            ax_mag.semilogx(ww, 20*np.log10(np.maximum(mag, 1e-6)), color=c, label=f'{outputs[ch]}')
-        ax_mag.set_ylabel('Magnitude (dB)')
-        ax_mag.set_xlabel('Frequency (rad/s)')
-        ax_mag.grid(True, which='both', alpha=0.3)
-        ax_mag.legend()
-        # Bottom-left: Another margin-like view (reuse mag for consistency)
-        ax_mag2 = fig.add_subplot(gs[1, 0])
-        for ch, c in enumerate(colors):
-            sys_tf = ct.ss2tf(sys_cl)
-            gij = ct.TransferFunction(sys_tf.num[ch][ch], sys_tf.den[ch][ch])
-            mag, phase, ww = ct.bode(gij, w, Plot=False)
-            if mag is None:
-                continue
-            ax_mag2.semilogx(ww, 20*np.log10(np.maximum(mag, 1e-6)), color=c, label=f'{outputs[ch]}')
-        ax_mag2.set_ylabel('Magnitude (dB)')
-        ax_mag2.set_xlabel('Frequency (rad/s)')
-        ax_mag2.grid(True, which='both', alpha=0.3)
-        ax_mag2.legend()
-        # Bottom-right: Closed-loop pole map
-        ax_poles = fig.add_subplot(gs[1, 1])
+
         poles = np.linalg.eigvals(sys_cl.A)
-        ax_poles.scatter(np.real(poles), np.imag(poles), c='tab:blue', marker='x')
-        ax_poles.axvline(0, color='k', linewidth=1)
-        ax_poles.axhline(0, color='k', linewidth=1)
-        ax_poles.set_xlabel('Real Axis (1/s)')
-        ax_poles.set_ylabel('Imag Axis (1/s)')
-        ax_poles.set_title('Closed-loop pole location')
-        ax_poles.grid(True, alpha=0.3)
-        mpl.tight_layout(rect=(0.0, 0.03, 1.0, 0.95))
-        mpl.savefig(filename)
-        mpl.show()
-        # Save raw data alongside plot
+
+        # Save raw data immediately
         try:
             import json
             export = {
@@ -802,8 +741,83 @@ class MultiLoopTuner:
             }
             with open('diagnostics_data.json', 'w') as f:
                 json.dump(export, f, indent=2)
+            print("JSON data saved to diagnostics_data.json")
         except Exception as e:
             print(f"Warning: could not write diagnostics_data.json: {e}")
+
+        # Now attempt plotting
+        try:
+            import matplotlib.pyplot as mpl
+            import matplotlib.gridspec as gridspec
+            fig = mpl.figure(figsize=(16, 10))
+            gs = gridspec.GridSpec(2, 2, figure=fig)
+            # Top-left: 3x3 step responses (Actual vs Desired)
+            gs_steps = gridspec.GridSpecFromSubplotSpec(3, 3, subplot_spec=gs[0, 0], wspace=0.35, hspace=0.35)
+            for i in range(3):
+                for j in range(3):
+                    ax = fig.add_subplot(gs_steps[i, j])
+                    trace = traces['matrix'][i][j]
+                    t_resp = np.array(trace['t'])
+                    yv = np.array(trace['actual'])
+                    desired = np.array(trace['desired'])
+                    ax.plot(t_resp, yv, 'b-', linewidth=2, label='Actual')
+                    ax.plot(t_resp, desired, 'r--', linewidth=1.2, label='Desired')
+                    ax.grid(True, alpha=0.3)
+                    if i == 2:
+                        ax.set_xlabel('Time (s)')
+                    if j == 0:
+                        ax.set_ylabel('Amplitude')
+                    ax.set_title(f'From: {inputs[j]}\nTo: {outputs[i]}', fontsize=9)
+                    if i == 0 and j == 0:
+                        ax.legend(fontsize=8)
+            fig.suptitle('Closed-Loop Diagnostics', fontsize=14, fontweight='bold')
+            # Top-right: Bode magnitude and phase (diagonal channels open-loop approx.)
+            ax_mag = fig.add_subplot(gs[0, 1])
+            ax_phase = ax_mag.twinx()
+            colors = ['tab:blue', 'tab:orange', 'tab:green']
+            w = np.logspace(-3, 2, 400)
+            for ch, c in enumerate(colors):
+                # Approximate open-loop: response from input ch to output ch with unity feedback
+                # Using closed-loop to get indicative frequency behavior
+                sys_tf = ct.ss2tf(sys_cl)
+                gij = ct.TransferFunction(sys_tf.num[ch][ch], sys_tf.den[ch][ch])
+                mag, phase, ww = ct.bode(gij, w, Plot=False)
+                if mag is None:
+                    continue
+                ax_mag.semilogx(ww, 20*np.log10(np.maximum(mag, 1e-6)), color=c, label=f'{outputs[ch]}')
+            ax_mag.set_ylabel('Magnitude (dB)')
+            ax_mag.set_xlabel('Frequency (rad/s)')
+            ax_mag.grid(True, which='both', alpha=0.3)
+            ax_mag.legend()
+            # Bottom-left: Another margin-like view (reuse mag for consistency)
+            ax_mag2 = fig.add_subplot(gs[1, 0])
+            for ch, c in enumerate(colors):
+                sys_tf = ct.ss2tf(sys_cl)
+                gij = ct.TransferFunction(sys_tf.num[ch][ch], sys_tf.den[ch][ch])
+                mag, phase, ww = ct.bode(gij, w, Plot=False)
+                if mag is None:
+                    continue
+                ax_mag2.semilogx(ww, 20*np.log10(np.maximum(mag, 1e-6)), color=c, label=f'{outputs[ch]}')
+            ax_mag2.set_ylabel('Magnitude (dB)')
+            ax_mag2.set_xlabel('Frequency (rad/s)')
+            ax_mag2.grid(True, which='both', alpha=0.3)
+            ax_mag2.legend()
+            # Bottom-right: Closed-loop pole map
+            ax_poles = fig.add_subplot(gs[1, 1])
+            ax_poles.scatter(np.real(poles), np.imag(poles), c='tab:blue', marker='x')
+            ax_poles.axvline(0, color='k', linewidth=1)
+            ax_poles.axhline(0, color='k', linewidth=1)
+            ax_poles.set_xlabel('Real Axis (1/s)')
+            ax_poles.set_ylabel('Imag Axis (1/s)')
+            ax_poles.set_title('Closed-loop pole location')
+            ax_poles.grid(True, alpha=0.3)
+            mpl.tight_layout(rect=(0.0, 0.03, 1.0, 0.95))
+            mpl.savefig(filename)
+            mpl.show()
+        except ImportError:
+            print("Matplotlib not available, skipping plot.")
+        except Exception as e:
+            print(f"Error during plotting: {e}")
     
     def display_results(self, concise: bool = True):
         """Display tuned controller parameters; concise by default."""
@@ -914,7 +928,7 @@ def main():
     
     # Perform sequential per-channel tuning cycles until requirements met or limit reached
     print("[main] Starting sequential tuning process...")
-    results = tuner.sequential_tune(cycles=0, max_cycles=10, verbose=True, use_hinf_inner=False , final_joint_refine=True)
+    results = tuner.sequential_tune(cycles=0, max_cycles=15, verbose=True, use_hinf_inner=False , final_joint_refine=True)
     print(f"[main] Sequential tuning finished after {results.get('cycles_run', '?')} cycles. Success={results.get('success')}.")
     if not results.get('success'):
         print("[main] Warning: Requirements not met after maximum cycles.")
