@@ -6,12 +6,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name="helicopter-control-tuner",
     version="1.0.0",
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="Mahdi Sarfarazi",
+    author_email="Mahdi_sarfarazi@outlook.com",
     description="Multi-loop helicopter control system tuner replicating MATLAB systune",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/helicopter-control-tuner",
+    url="https://github.com/mahdisf/classic-multiloop-controller",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
