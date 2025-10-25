@@ -30,7 +30,7 @@ This Python implementation replicates MATLAB's `systune` functionality for desig
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/helicopter-control-tuner.git
+   git clone https://github.com/mahdisf/classic-multiloop-controller.git
    cd helicopter-control-tuner
    ```
 
@@ -99,14 +99,6 @@ The system uses a linearized 8-state helicopter model with:
 3. **Optimization**:
    - Global: Differential Evolution.
    - Local: SLSQP.
-
-## Contributing
-
-Contributions welcome! Please open issues for bugs or feature requests.
-
-## License
-
-[Specify your license, e.g., MIT]
 
 ## References
 
