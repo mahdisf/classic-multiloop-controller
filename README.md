@@ -74,6 +74,8 @@ results = tuner.sequential_tune(cycles=5, max_cycles=15, verbose=True, use_hinf_
 
 - Console: Tuned PI gains and SOF matrix.
 - Plots: Step responses, Bode plots, pole map (saved as `full_diagnostics.png`).
+- example:
+- <img width="1400" height="810" alt="classic_controller_final" src="https://github.com/user-attachments/assets/d143ea45-d6ed-4eca-9fd2-4cfc98a670dc" />
 - Data: JSON export of diagnostics (`diagnostics_data.json`).
 
 ## Helicopter Model
